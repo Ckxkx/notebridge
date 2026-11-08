@@ -12,7 +12,7 @@
     <a href="#开发">开发</a>
   </p>
   <p>
-    <img src="https://img.shields.io/badge/release-0.1.8-7C3AED" alt="0.1.8 正式版">
+    <img src="https://img.shields.io/badge/release-0.1.9-7C3AED" alt="0.1.9 正式版">
     <img src="https://img.shields.io/badge/Obsidian-1.11.4%2B-7C3AED?logo=obsidian&logoColor=white" alt="Obsidian 1.11.4 及以上">
     <img src="https://img.shields.io/badge/license-Apache_2.0-D22128" alt="Apache 2.0 许可证">
   </p>
@@ -25,9 +25,9 @@ NoteBridge is an Obsidian plugin that publishes Markdown notes and referenced im
 NoteBridge 是一个面向 Hexo 的 Obsidian 发布插件。它将文章转换、图片上传、封面设置、分类选择、状态检查、撤回和部署查询集中到一个操作中心，让你无需离开笔记库，也能清楚完成每一次发布。
 
 > [!NOTE]
-> **NoteBridge 0.1.8 stable** supports Obsidian on desktop and mobile. Back up your notes and publishing records before important operations.
+> **NoteBridge 0.1.9 stable** supports Obsidian on desktop and mobile. Back up your notes and publishing records before important operations.
 >
-> **NoteBridge 0.1.8 正式版**，支持 Obsidian 桌面端与移动端。进行重要发布操作前，建议备份笔记与发布记录。
+> **NoteBridge 0.1.9 正式版**，支持 Obsidian 桌面端与移动端。进行重要发布操作前，建议备份笔记与发布记录。
 
 <div align="center">
   <img src="docs/images/notebridge-demo.gif" alt="NoteBridge 操作中心、发布状态、封面选择与文章管理动态演示" width="900">
@@ -73,7 +73,7 @@ NoteBridge 是一个面向 Hexo 的 Obsidian 发布插件。它将文章转换�
 
 ### Install manually
 
-1. Download `manifest.json`, `main.js`, and `styles.css` from the [NoteBridge 0.1.8 release](https://github.com/Ckxkx/notebridge/releases/tag/0.1.8).
+1. Download `manifest.json`, `main.js`, and `styles.css` from the [NoteBridge 0.1.9 release](https://github.com/Ckxkx/notebridge/releases/tag/0.1.9).
 2. Copy all three files into the `.obsidian/plugins/notebridge/` folder inside your Obsidian vault.
 3. Restart Obsidian and enable **NoteBridge** under **Settings → Community plugins**.
 4. When updating, replace all three files together so they remain on the same version.

@@ -1,6 +1,6 @@
 {
   "name": "notebridge",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "Obsidian to Hexo publishing plugin",
   "main": "main.js",
   "scripts": {
