@@ -12498,6 +12498,12 @@ function mergeThreeWay(baseText, localText, remoteText) {
 
 // src/main.ts
 var defaults = { root: "blog", posts: "source/_posts", images: "source/imgs", siteRoot: "/", imageUrl: "imgs", fields: ["title", "date", "updated", "tags", "categories", "permalink"], fluidImages: true, repo: "", branch: "main", secret: "", site: "", workflow: "pages.yml" };
+function destructive(button) {
+  const setDestructive = Reflect.get(button, "setDestructive");
+  if (typeof setDestructive === "function") setDestructive.call(button);
+  else Reflect.get(button, "setWarning").call(button);
+  return button;
+}
 function stringMap(value) {
   return !!value && typeof value === "object" && !Array.isArray(value) && Object.values(value).every((v) => typeof v === "string");
 }
@@ -12549,7 +12555,7 @@ var NoteBridge = class extends import_obsidian2.Plugin {
     const saved = await this.loadData();
     this.settings = { ...defaults, ...saved && typeof saved === "object" && !Array.isArray(saved) ? saved : {} };
     this.addSettingTab(new SettingsTab(this.app, this));
-    this.status = import_obsidian2.Platform.isMobile ? document.createElement("span") : this.addStatusBarItem();
+    this.status = import_obsidian2.Platform.isMobile ? createSpan() : this.addStatusBarItem();
     this.setStatus("\u5C31\u7EEA\uFF08\u624B\u52A8\u53D1\u5E03\uFF09");
     this.addCommand({ id: "repair", name: "\u68C0\u67E5\u5E76\u4FEE\u590D\u53D1\u5E03\u95EE\u9898", callback: () => void this.repair(this.app.workspace.getActiveFile() || void 0) });
     this.addCommand({ id: "recover-shared", name: "\u6062\u590D\u672C\u673A\u635F\u574F\u7684\u540C\u6B65\u8BB0\u5F55", callback: () => void this.recoverSharedRecord() });
@@ -13856,7 +13862,7 @@ var MissingRemoteConfirmModal = class extends import_obsidian2.Modal {
     d.createEl("summary", { text: "\u67E5\u770B\u4E0A\u6B21\u53D1\u5E03\u7684\u6587\u7AE0\u5185\u5BB9" });
     d.createEl("pre", { text: this.text });
     addHomeButton(this, this.plugin);
-    new import_obsidian2.Setting(el).addButton((b) => b.setButtonText("\u53D6\u6D88").onClick(() => this.close())).addButton((b) => b.setButtonText("\u786E\u8BA4\u6E05\u7406\u65E7\u5173\u8054").setWarning().onClick(() => {
+    new import_obsidian2.Setting(el).addButton((b) => b.setButtonText("\u53D6\u6D88").onClick(() => this.close())).addButton((b) => destructive(b).setButtonText("\u786E\u8BA4\u6E05\u7406\u65E7\u5173\u8054").onClick(() => {
       this.close();
       void this.plugin.retireMissingRemote(this.recordScope, this.config, this.record);
     }));
@@ -14364,7 +14370,7 @@ var WithdrawConfirmModal = class extends import_obsidian2.Modal {
     el.createEl("p", { text: "\u53D6\u6D88\u5C06\u4FDD\u7559\u7EBF\u4E0A\u7248\u672C\u3002\u8FDC\u7AEF\u56FE\u7247\u4FDD\u7559\uFF1B\u6B64\u64CD\u4F5C\u521B\u5EFA\u65B0\u7684 Git \u63D0\u4EA4\uFF0C\u65E7\u5185\u5BB9\u4ECD\u5728 Git \u5386\u53F2\u4E2D\u3002\u7F51\u7AD9\u66F4\u65B0\u53D6\u51B3\u4E8E\u5DE5\u4F5C\u6D41\u3002" });
     const source = this.app.vault.getAbstractFileByPath(this.record.source);
     addHomeButton(this, this.plugin, source instanceof import_obsidian2.TFile ? source : void 0);
-    new import_obsidian2.Setting(el).addButton((b) => b.setButtonText("\u4FDD\u7559\u7EBF\u4E0A\u7248\u672C").onClick(() => this.close())).addButton((b) => b.setButtonText("\u786E\u8BA4\u64A4\u56DE").setWarning().onClick(() => {
+    new import_obsidian2.Setting(el).addButton((b) => b.setButtonText("\u4FDD\u7559\u7EBF\u4E0A\u7248\u672C").onClick(() => this.close())).addButton((b) => destructive(b).setButtonText("\u786E\u8BA4\u64A4\u56DE").onClick(() => {
       this.close();
       if (this.fromDelete && this.app.vault.getAbstractFileByPath(this.record.source)) {
         new import_obsidian2.Notice("\u672C\u5730\u6587\u4EF6\u5DF2\u6062\u590D\uFF0C\u8BF7\u91CD\u65B0\u786E\u8BA4\u64A4\u56DE");
@@ -14473,10 +14479,48 @@ var PublishableArticleModal = class extends import_obsidian2.FuzzySuggestModal {
     void this.plugin.preview(true, file);
   }
 };
+var textSettingKeys = ["repo", "branch", "root", "posts", "images", "siteRoot", "imageUrl", "site", "workflow"];
 var SettingsTab = class extends import_obsidian2.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
     this.plugin = plugin;
+  }
+  getSettingDefinitions() {
+    const text2 = (name, key, desc = "") => ({ name, desc, control: { type: "text", key } });
+    return [
+      text2("GitHub \u4ED3\u5E93", "repo", "\u683C\u5F0F\uFF1A\u6240\u6709\u8005/\u4ED3\u5E93"),
+      text2("\u6E90\u7801\u5206\u652F", "branch"),
+      text2("\u53D1\u5E03\u6839\u76EE\u5F55", "root"),
+      text2("\u6587\u7AE0\u76EE\u6807\u76EE\u5F55", "posts"),
+      text2("\u56FE\u7247\u76EE\u6807\u76EE\u5F55", "images"),
+      text2("\u7AD9\u70B9 root", "siteRoot", "\u4F8B\u5982 / \u6216 /blog/"),
+      text2("\u56FE\u7247\u516C\u5F00 URL \u8DEF\u5F84", "imageUrl", "\u76F8\u5BF9\u4E8E\u7AD9\u70B9 root\uFF0C\u4F8B\u5982 imgs"),
+      text2("\u7AD9\u70B9\u5730\u5740", "site", "\u9884\u7559\u8BBE\u7F6E\uFF0C\u5F53\u524D\u7248\u672C\u5C1A\u4E0D\u4F7F\u7528\u8BE5\u5730\u5740"),
+      text2("\u90E8\u7F72\u5DE5\u4F5C\u6D41\u6587\u4EF6\u540D", "workflow", "\u4F8B\u5982 pages.yml\uFF1B\u67E5\u8BE2\u9700\u8981 Actions \u8BFB\u53D6\u6743\u9650"),
+      { name: "\u516C\u5F00 frontmatter \u5B57\u6BB5", desc: "\u9017\u53F7\u5206\u9694\uFF1B\u63A7\u5236\u5B57\u6BB5\u59CB\u7EC8\u79FB\u9664", control: { type: "text", key: "fields" } },
+      { name: "Fluid \u6587\u7AE0\u5C01\u9762\u548C\u5934\u56FE", desc: "\u5F00\u542F\u540E\u516C\u5F00\u5E76\u5904\u7406 index_img\uFF08\u9996\u9875\u5C01\u9762\uFF09\u548C banner_img\uFF08\u6587\u7AE0\u9875\u5934\u56FE\uFF09\uFF1B\u672C\u5730\u56FE\u7247\u5FC5\u987B\u4F4D\u4E8E\u53D1\u5E03\u76EE\u5F55\u5185\u7684 imgs \u6587\u4EF6\u5939\u3002", control: { type: "toggle", key: "fluidImages" } },
+      { name: "GitHub \u51ED\u636E", desc: "\u4EC5\u4FDD\u5B58\u5BC6\u94A5\u5F15\u7528\uFF1B\u9700\u8981\u76EE\u6807\u4ED3\u5E93 Contents \u8BFB\u5199\u6743\u9650", render: (setting) => {
+        setting.addComponent((c) => new import_obsidian2.SecretComponent(this.app, c).setValue(this.plugin.settings.secret).onChange(async (v) => {
+          this.plugin.settings.secret = v || "";
+          await this.plugin.saveData(this.plugin.settings);
+        }));
+      } },
+      { name: "\u6D4B\u8BD5\u8FDE\u63A5", desc: "\u53EA\u8BFB\u68C0\u67E5\u4ED3\u5E93\u548C\u5206\u652F", action: () => void this.plugin.test() },
+      { name: "\u53D1\u5E03\u65B9\u5F0F", desc: "\u652F\u6301\u624B\u52A8\u53D1\u5E03\u3001\u663E\u5F0F\u64A4\u56DE\u53CA\u5DE5\u4F5C\u6D41\u72B6\u6001\u67E5\u8BE2\uFF1B\u81EA\u52A8\u53D1\u5E03\u5C1A\u672A\u5B9E\u73B0\u3002\u8BF7\u5148\u9605\u8BFB README\u3002" }
+    ];
+  }
+  getControlValue(key) {
+    if (key === "fields") return this.plugin.settings.fields.join(",");
+    if (key === "fluidImages") return this.plugin.settings.fluidImages;
+    if (textSettingKeys.includes(key)) return this.plugin.settings[key];
+    return void 0;
+  }
+  async setControlValue(key, value) {
+    if (key === "fields" && typeof value === "string") this.plugin.settings.fields = value.split(",").map((x) => x.trim()).filter(Boolean);
+    else if (key === "fluidImages") this.plugin.settings.fluidImages = value === true;
+    else if (typeof value === "string" && textSettingKeys.includes(key)) this.plugin.settings[key] = value.trim();
+    else return;
+    await this.plugin.saveData(this.plugin.settings);
   }
   display() {
     const el = this.containerEl;
@@ -14507,7 +14551,7 @@ var SettingsTab = class extends import_obsidian2.PluginSettingTab {
       await this.plugin.saveData(this.plugin.settings);
     }));
     new import_obsidian2.Setting(el).setName("\u6D4B\u8BD5\u8FDE\u63A5").addButton((b) => b.setButtonText("\u53EA\u8BFB\u68C0\u67E5").onClick(() => void this.plugin.test()));
-    el.createEl("p", { text: "\u5F53\u524D\u5F00\u53D1\u7248\u672C\u652F\u6301\u624B\u52A8\u53D1\u5E03\u3001\u663E\u5F0F\u64A4\u56DE\u53CA\u5DE5\u4F5C\u6D41\u72B6\u6001\u67E5\u8BE2\uFF1B\u81EA\u52A8\u53D1\u5E03\u5C1A\u672A\u5B9E\u73B0\u3002\u8BF7\u5148\u9605\u8BFB README\u3002" });
+    el.createEl("p", { text: "\u5F53\u524D\u7248\u672C\u652F\u6301\u624B\u52A8\u53D1\u5E03\u3001\u663E\u5F0F\u64A4\u56DE\u53CA\u5DE5\u4F5C\u6D41\u72B6\u6001\u67E5\u8BE2\uFF1B\u81EA\u52A8\u53D1\u5E03\u5C1A\u672A\u5B9E\u73B0\u3002\u8BF7\u5148\u9605\u8BFB README\u3002" });
   }
 };
 /*! Bundled license information:

@@ -5,6 +5,5 @@
   "minAppVersion": "1.11.4",
   "description": "Publish selected notes and images to a Hexo repository through GitHub.",
   "author": "Ckxkx",
-  "isDesktopOnly": false,
-  "authorUrl": "https://github.com/Ckxkx"
+  "isDesktopOnly": false
 }

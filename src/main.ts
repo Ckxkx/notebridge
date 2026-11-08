@@ -1,4 +1,4 @@
-import { App, FuzzyMatch, FuzzySuggestModal, Modal, Notice, Platform, Plugin, PluginSettingTab, SecretComponent, Setting, TFile, TFolder } from 'obsidian';
+import { App, ButtonComponent, FuzzyMatch, FuzzySuggestModal, Modal, Notice, Platform, Plugin, PluginSettingTab, SecretComponent, Setting, SettingDefinitionItem, TFile, TFolder } from 'obsidian';
 import { Config, Plan, assertUploadSafe, cleanPath, ensureIdentity, isArticle, noteIdentity, prepare, within } from './core';
 import { Github, Item, blobHash } from './github';
 import { ArticleStatus, localLabel, remoteLabel, remoteStatus } from './dashboard';
@@ -8,6 +8,10 @@ import { mergeRecords, Overlay, renameRecords, resolveRenamedPath, SyncState, Wi
 import { mergeThreeWay } from './merge';
 interface Settings extends Config { repo:string; branch:string; secret:string; site:string; workflow:string }
 const defaults:Settings={root:'blog',posts:'source/_posts',images:'source/imgs',siteRoot:'/',imageUrl:'imgs',fields:['title','date','updated','tags','categories','permalink'],fluidImages:true,repo:'',branch:'main',secret:'',site:'',workflow:'pages.yml'};
+function destructive<T extends ButtonComponent>(button:T):T{
+ const setDestructive=Reflect.get(button,'setDestructive');if(typeof setDestructive==='function')setDestructive.call(button);else Reflect.get(button,'setWarning').call(button);
+ return button;
+}
 type State = SyncState;
 interface PendingOperation {version:1;scope:string;config:string;kind:'publish'|'withdraw';candidate:string;parent:string;expected:Record<string,string|null>;before:State;after:State}
 
@@ -31,7 +35,7 @@ export default class NoteBridge extends Plugin {
  async onload() {
   const saved:unknown=await this.loadData();this.settings={...defaults,...(saved&&typeof saved==='object'&&!Array.isArray(saved)?saved as Partial<Settings>:{})};
   this.addSettingTab(new SettingsTab(this.app,this));
-  this.status=Platform.isMobile ? document.createElement('span') : this.addStatusBarItem(); this.setStatus('就绪（手动发布）');
+  this.status=Platform.isMobile ? createSpan() : this.addStatusBarItem(); this.setStatus('就绪（手动发布）');
   this.addCommand({id:'repair',name:'检查并修复发布问题',callback:()=>void this.repair(this.app.workspace.getActiveFile()||undefined)});
   this.addCommand({id:'recover-shared',name:'恢复本机损坏的同步记录',callback:()=>void this.recoverSharedRecord()});
   this.addCommand({id:'recover-operation',name:'核对并恢复中断的提交记录',callback:()=>void this.recoverOperation()});
@@ -541,7 +545,7 @@ class MissingRemoteListModal extends Modal {
 }
 class MissingRemoteConfirmModal extends Modal {
  constructor(app:App,private plugin:NoteBridge,private recordScope:string,private config:string,private record:MissingRemoteRecord,private text:string){super(app);}
- onOpen(){const el=this.contentEl;el.createEl('h2',{text:'确认清理旧发布关联'});el.createEl('p',{text:`旧本地路径：${this.record.source}；已不存在的远端路径：${this.record.target}`});el.createEl('p',{text:'请阅读上次发布内容，确认这条关联确实不再需要，且不是尚未同步的改名文章。清理不会修改 GitHub 或笔记，之后仍需等待同步。'});const d=el.createEl('details');d.createEl('summary',{text:'查看上次发布的文章内容'});d.createEl('pre',{text:this.text});addHomeButton(this,this.plugin);new Setting(el).addButton(b=>b.setButtonText('取消').onClick(()=>this.close())).addButton(b=>b.setButtonText('确认清理旧关联').setWarning().onClick(()=>{this.close();void this.plugin.retireMissingRemote(this.recordScope,this.config,this.record);}));}
+ onOpen(){const el=this.contentEl;el.createEl('h2',{text:'确认清理旧发布关联'});el.createEl('p',{text:`旧本地路径：${this.record.source}；已不存在的远端路径：${this.record.target}`});el.createEl('p',{text:'请阅读上次发布内容，确认这条关联确实不再需要，且不是尚未同步的改名文章。清理不会修改 GitHub 或笔记，之后仍需等待同步。'});const d=el.createEl('details');d.createEl('summary',{text:'查看上次发布的文章内容'});d.createEl('pre',{text:this.text});addHomeButton(this,this.plugin);new Setting(el).addButton(b=>b.setButtonText('取消').onClick(()=>this.close())).addButton(b=>destructive(b).setButtonText('确认清理旧关联').onClick(()=>{this.close();void this.plugin.retireMissingRemote(this.recordScope,this.config,this.record);}));}
  onClose(){this.contentEl.empty();}
 }
 interface WithdrawRecord {source:string;target:string;exists:boolean}
@@ -700,7 +704,7 @@ class WithdrawListModal extends Modal {
 }
 class WithdrawConfirmModal extends Modal {
  constructor(app:App,private plugin:NoteBridge,private recordScope:string,private record:WithdrawRecord,private fromDelete=false){super(app);}
- onOpen(){const el=this.contentEl;el.createEl('h2',{text:this.fromDelete?'本地文章已删除，要撤回线上版本吗？':'确认撤回发布'});el.createEl('p',{text:`本地文章：${this.record.source}`});el.createEl('p',{text:`仓库：${this.plugin.settings.repo}，分支：${this.plugin.settings.branch}`});el.createEl('p',{text:`将从远端删除：${this.record.target}`});el.createEl('p',{text:'取消将保留线上版本。远端图片保留；此操作创建新的 Git 提交，旧内容仍在 Git 历史中。网站更新取决于工作流。'});const source=this.app.vault.getAbstractFileByPath(this.record.source);addHomeButton(this,this.plugin,source instanceof TFile?source:undefined);new Setting(el).addButton(b=>b.setButtonText('保留线上版本').onClick(()=>this.close())).addButton(b=>b.setButtonText('确认撤回').setWarning().onClick(()=>{this.close();if(this.fromDelete && this.app.vault.getAbstractFileByPath(this.record.source)){new Notice('本地文件已恢复，请重新确认撤回');return;}void this.plugin.withdraw(this.recordScope,this.record.source,this.record.target);}));}
+ onOpen(){const el=this.contentEl;el.createEl('h2',{text:this.fromDelete?'本地文章已删除，要撤回线上版本吗？':'确认撤回发布'});el.createEl('p',{text:`本地文章：${this.record.source}`});el.createEl('p',{text:`仓库：${this.plugin.settings.repo}，分支：${this.plugin.settings.branch}`});el.createEl('p',{text:`将从远端删除：${this.record.target}`});el.createEl('p',{text:'取消将保留线上版本。远端图片保留；此操作创建新的 Git 提交，旧内容仍在 Git 历史中。网站更新取决于工作流。'});const source=this.app.vault.getAbstractFileByPath(this.record.source);addHomeButton(this,this.plugin,source instanceof TFile?source:undefined);new Setting(el).addButton(b=>b.setButtonText('保留线上版本').onClick(()=>this.close())).addButton(b=>destructive(b).setButtonText('确认撤回').onClick(()=>{this.close();if(this.fromDelete && this.app.vault.getAbstractFileByPath(this.record.source)){new Notice('本地文件已恢复，请重新确认撤回');return;}void this.plugin.withdraw(this.recordScope,this.record.source,this.record.target);}));}
  onClose(){this.contentEl.empty();}
 }
 class DeploymentModal extends Modal {
@@ -724,10 +728,35 @@ class PublishableArticleModal extends FuzzySuggestModal<Plan>{
  getItems(){return this.plans;}getItemText(plan:Plan){return plan.source;}
  onChooseItem(plan:Plan){const file=this.app.vault.getAbstractFileByPath(plan.source);if(!(file instanceof TFile)){new Notice('文章已不存在，请重新预览');return;}void this.plugin.preview(true,file);}
 }
+type TextKey='repo'|'branch'|'root'|'posts'|'images'|'siteRoot'|'imageUrl'|'site'|'workflow';
+const textSettingKeys:TextKey[]=['repo','branch','root','posts','images','siteRoot','imageUrl','site','workflow'];
 class SettingsTab extends PluginSettingTab {
  constructor(app:App,private plugin:NoteBridge){super(app,plugin);}
+ getSettingDefinitions():SettingDefinitionItem[]{
+  const text=(name:string,key:TextKey,desc=''):SettingDefinitionItem=>({name,desc,control:{type:'text',key}});
+  return [
+   text('GitHub 仓库','repo','格式：所有者/仓库'),text('源码分支','branch'),text('发布根目录','root'),text('文章目标目录','posts'),text('图片目标目录','images'),text('站点 root','siteRoot','例如 / 或 /blog/'),text('图片公开 URL 路径','imageUrl','相对于站点 root，例如 imgs'),text('站点地址','site','预留设置，当前版本尚不使用该地址'),text('部署工作流文件名','workflow','例如 pages.yml；查询需要 Actions 读取权限'),
+   {name:'公开 frontmatter 字段',desc:'逗号分隔；控制字段始终移除',control:{type:'text',key:'fields'}},
+   {name:'Fluid 文章封面和头图',desc:'开启后公开并处理 index_img（首页封面）和 banner_img（文章页头图）；本地图片必须位于发布目录内的 imgs 文件夹。',control:{type:'toggle',key:'fluidImages'}},
+   {name:'GitHub 凭据',desc:'仅保存密钥引用；需要目标仓库 Contents 读写权限',render:setting=>{setting.addComponent(c=>new SecretComponent(this.app,c).setValue(this.plugin.settings.secret).onChange(async v=>{this.plugin.settings.secret=v||'';await this.plugin.saveData(this.plugin.settings);}));}},
+   {name:'测试连接',desc:'只读检查仓库和分支',action:()=>void this.plugin.test()},
+   {name:'发布方式',desc:'支持手动发布、显式撤回及工作流状态查询；自动发布尚未实现。请先阅读 README。'}
+  ];
+ }
+ getControlValue(key:string):unknown{
+  if(key==='fields')return this.plugin.settings.fields.join(',');
+  if(key==='fluidImages')return this.plugin.settings.fluidImages;
+  if(textSettingKeys.includes(key as TextKey))return this.plugin.settings[key as TextKey];
+  return undefined;
+ }
+ async setControlValue(key:string,value:unknown){
+  if(key==='fields'&&typeof value==='string')this.plugin.settings.fields=value.split(',').map(x=>x.trim()).filter(Boolean);
+  else if(key==='fluidImages')this.plugin.settings.fluidImages=value===true;
+  else if(typeof value==='string'&&textSettingKeys.includes(key as TextKey))this.plugin.settings[key as TextKey]=value.trim();
+  else return;
+  await this.plugin.saveData(this.plugin.settings);
+ }
  display(){const el=this.containerEl;el.empty();
- type TextKey='repo'|'branch'|'root'|'posts'|'images'|'siteRoot'|'imageUrl'|'site'|'workflow';
  const field=(name:string,key:TextKey,desc='')=>new Setting(el).setName(name).setDesc(desc).addText(t=>t.setValue(this.plugin.settings[key]).onChange(async v=>{this.plugin.settings[key]=v.trim();await this.plugin.saveData(this.plugin.settings);}));
  field('GitHub 仓库','repo','格式：所有者/仓库');field('源码分支','branch');field('发布根目录','root');field('文章目标目录','posts');field('图片目标目录','images');field('站点 root','siteRoot','例如 / 或 /blog/');field('图片公开 URL 路径','imageUrl','相对于站点 root，例如 imgs');field('站点地址','site','预留设置，当前版本尚不使用该地址');
  field('部署工作流文件名','workflow','例如 pages.yml；查询需要 Actions 读取权限');
@@ -735,6 +764,6 @@ class SettingsTab extends PluginSettingTab {
  new Setting(el).setName('Fluid 文章封面和头图').setDesc('开启后公开并处理 index_img（首页封面）和 banner_img（文章页头图）；本地图片必须位于发布目录内的 imgs 文件夹。').addToggle(t=>t.setValue(!!this.plugin.settings.fluidImages).onChange(async v=>{this.plugin.settings.fluidImages=v;await this.plugin.saveData(this.plugin.settings);}));
  new Setting(el).setName('GitHub 凭据').setDesc('仅保存密钥引用；需要目标仓库 Contents 读写权限').addComponent(c=>new SecretComponent(this.app,c).setValue(this.plugin.settings.secret).onChange(async v=>{this.plugin.settings.secret=v || '';await this.plugin.saveData(this.plugin.settings);}));
  new Setting(el).setName('测试连接').addButton(b=>b.setButtonText('只读检查').onClick(()=>void this.plugin.test()));
- el.createEl('p',{text:'当前开发版本支持手动发布、显式撤回及工作流状态查询；自动发布尚未实现。请先阅读 README。'});
+ el.createEl('p',{text:'当前版本支持手动发布、显式撤回及工作流状态查询；自动发布尚未实现。请先阅读 README。'});
  }
 }

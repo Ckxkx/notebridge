@@ -1,10 +1,12 @@
 <div align="center">
   <h1>NoteBridge</h1>
+  <p><strong>Publish Obsidian notes to your Hexo blog.</strong></p>
+  <p>Articles and images · Covers and categories · Status checks · Multi-device sync · Conflict recovery</p>
   <p><strong>在 Obsidian 中，完成 Hexo 博客发布。</strong></p>
   <p>文章与图片 · 封面与分类 · 状态检查 · 多端同步 · 冲突恢复</p>
   <p>
-    <a href="#安装">安装</a> ·
-    <a href="#快速开始">快速开始</a> ·
+    <a href="#installation">Installation</a> ·
+    <a href="#basic-usage">Basic usage</a> ·
     <a href="#界面预览">界面预览</a> ·
     <a href="#使用指南">使用指南</a> ·
     <a href="#开发">开发</a>
@@ -18,9 +20,13 @@
 
 ---
 
+NoteBridge is an Obsidian plugin that publishes Markdown notes and referenced images to a Hexo source repository through GitHub. It brings article previews, image uploads, cover and category selection, publishing status, withdrawals, deployment checks, and conflict recovery into one integrated control center.
+
 NoteBridge 是一个面向 Hexo 的 Obsidian 发布插件。它将文章转换、图片上传、封面设置、分类选择、状态检查、撤回和部署查询集中到一个操作中心，让你无需离开笔记库，也能清楚完成每一次发布。
 
 > [!NOTE]
+> **NoteBridge 0.1.8 stable** supports Obsidian on desktop and mobile. Back up your notes and publishing records before important operations.
+>
 > **NoteBridge 0.1.8 正式版**，支持 Obsidian 桌面端与移动端。进行重要发布操作前，建议备份笔记与发布记录。
 
 <div align="center">
@@ -57,7 +63,24 @@ NoteBridge 是一个面向 Hexo 的 Obsidian 发布插件。它将文章转换�
 - **语言与工程**：TypeScript、Node.js、esbuild、ESLint。
 - **文档展示**：本地 PNG 截图与 GIF 动画，不依赖 JavaScript 或 Lottie 播放器。
 
-## 安装
+## Installation
+
+### Requirements
+
+- Obsidian **1.11.4 or later** on desktop or mobile.
+- A GitHub repository containing your Hexo source files.
+- A GitHub fine-grained personal access token with access to that repository.
+
+### Install manually
+
+1. Download `manifest.json`, `main.js`, and `styles.css` from the [NoteBridge 0.1.8 release](https://github.com/Ckxkx/notebridge/releases/tag/0.1.8).
+2. Copy all three files into the `.obsidian/plugins/notebridge/` folder inside your Obsidian vault.
+3. Restart Obsidian and enable **NoteBridge** under **Settings → Community plugins**.
+4. When updating, replace all three files together so they remain on the same version.
+
+You do not need Node.js, Git, or a separate server to use the plugin.
+
+### 中文安装说明
 
 ### 环境要求
 
@@ -74,7 +97,17 @@ NoteBridge 是一个面向 Hexo 的 Obsidian 发布插件。它将文章转换�
 
 最终用户不需要安装 Node.js、Git 或独立服务器；只有参与开发时才需要 Node.js。
 
-## 快速开始
+## Basic usage
+
+1. Create a fine-grained GitHub token limited to your Hexo repository. Grant **Contents: Read and write**; optionally grant **Actions: Read-only** for deployment status.
+2. Add the token to Obsidian SecretStorage, then select that credential in the NoteBridge settings. Never store the token in notes or synchronization records.
+3. Configure your repository, branch, publishing folders, site root, image URL path, and workflow filename. The default folders are `blog`, `source/_posts`, and `source/imgs`.
+4. Place Markdown notes in `blog/` and referenced local images in `blog/imgs/`.
+5. Open **NoteBridge: Control Center** from the ribbon or the article context menu, then choose **Preview and publish current article**.
+6. Review the converted article, images, and destination paths. Nothing is written to GitHub until you explicitly confirm the publishing snapshot.
+7. After publishing, open the workflow status to follow the deployment associated with that commit.
+
+### 中文配置与发布说明
 
 ### 1. 准备 GitHub 凭据
 
@@ -260,7 +293,9 @@ npm run lint
 
 ## 网络与隐私
 
-NoteBridge 使用 `api.github.com` 读取配置的仓库、分支和 Actions 状态，并在确认后写入选中的文章转换副本和图片。发布基线与首次准备日期保存在 Obsidian localStorage 和 Vault 同步记录中。插件不提供遥测；远端内容和 Git 历史由 GitHub 及你的仓库权限管理。
+NoteBridge uses `api.github.com` to read the configured repository, branch, and Actions status, and writes only the confirmed article snapshots and images. To provide batch previews, publishing status, and cover selection, it enumerates note and image paths in the vault and reads files required for those operations. Publishing baselines and initial preparation dates are stored in Obsidian localStorage and vault synchronization records. NoteBridge does not collect telemetry.
+
+NoteBridge 使用 `api.github.com` 读取配置的仓库、分支和 Actions 状态，并在确认后写入选中的文章转换副本和图片。为提供批量预览、发布状态和封面选择，插件会枚举 Vault 中的文章与图片路径，并读取这些功能所需的文件。发布基线与首次准备日期保存在 Obsidian localStorage 和 Vault 同步记录中。插件不提供遥测；远端内容和 Git 历史由 GitHub 及你的仓库权限管理。
 
 ## 许可
 

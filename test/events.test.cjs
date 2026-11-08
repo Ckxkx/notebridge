@@ -1,5 +1,5 @@
 const test=require('node:test');const assert=require('node:assert/strict');const Module=require('node:module');const original=Module._load;let opened=[];let requestHandler=()=>{throw Error('unexpected network');};let statusText='';let notices=[];
-class Plugin { constructor(app){this.app=app;} async loadData(){return null;} addSettingTab(){} addStatusBarItem(){return {setText(s){statusText=s;},setAttribute(){}};} addCommand(c){(this.commands??=[]).push(c);} addRibbonIcon(){} registerEvent(){} }
+class Plugin { constructor(app){this.app=app;} async loadData(){return null;} addSettingTab(tab){this.settingTab=tab;} addStatusBarItem(){return {setText(s){statusText=s;},setAttribute(){}};} addCommand(c){(this.commands??=[]).push(c);} addRibbonIcon(){} registerEvent(){} }
 class Modal {constructor(app){this.app=app;} open(){opened.push(this);} }
 class FuzzySuggestModal extends Modal {setPlaceholder(){}} class TFile{} class TFolder{} class Notice{constructor(s){notices.push(String(s));}} class PluginSettingTab{} class Setting{} class SecretComponent{}
 const Platform={isMobile:false};
@@ -8,7 +8,7 @@ global.window=global;
 const PluginMain=require('./main.cjs').default;
 function make(){const storage=new Map();const state={version:1,dates:{},targets:{'blog/a.md':'source/_posts/a.md','blog/sub/b.md':'source/_posts/sub/b.md','blog-private/c.md':'x.md'},baselines:{}};let del;const app={vault:{getName:()=> 'test',on:(event,cb)=>{if(event==='delete')del=cb;return {};},getAbstractFileByPath:()=>null},workspace:{on:()=>({})},loadLocalStorage:k=>k.startsWith('notebridge-state:')?state:(storage.get(k)??null),saveLocalStorage:(k,v)=>{if(k.startsWith('notebridge-state:')){if(v!==state){for(const key of Object.keys(state))delete state[key];Object.assign(state,v);}}else storage.set(k,v);}};return {app,state,getDelete:()=>del};}
 const delay=()=>new Promise(r=>setTimeout(r,650));
-test('手机端启动不创建桌面状态栏',async()=>{const x=make(),p=new PluginMain(x.app);Platform.isMobile=true;global.document={createElement:()=>({setText(){},setAttribute(){}})};p.addStatusBarItem=()=>{throw Error('desktop status bar');};try{await p.onload();assert.equal(p.last,'就绪（手动发布）');p.onunload();}finally{Platform.isMobile=false;delete global.document;}});
+test('手机端启动不创建桌面状态栏',async()=>{const x=make(),p=new PluginMain(x.app);Platform.isMobile=true;global.createSpan=()=>({setText(){},setAttribute(){}});p.addStatusBarItem=()=>{throw Error('desktop status bar');};try{await p.onload();assert.equal(p.last,'就绪（手动发布）');p.onunload();}finally{Platform.isMobile=false;delete global.createSpan;}});
 test('外部同步设置后重新加载并使旧任务失效',async()=>{const x=make(),p=new PluginMain(x.app);await p.onload();const previous=p.configKey();p.loadData=async()=>({repo:'owner/site',branch:'main'});await p.onExternalSettingsChange();assert.equal(p.settings.repo,'owner/site');assert.notEqual(p.configKey(),previous);assert.equal(p.last,'设置已从同步文件更新');p.onunload();});
 test('预览后同步到较新的发布记录时不会提交旧快照',async()=>{notices=[];const x=make(),p=new PluginMain(x.app);await p.onload();let writes=0;p.github=()=>({publish:async()=>{writes++;throw Error('must not publish');}});const before=JSON.stringify(x.state);p.syncRecords=async()=>{x.state.baselines['source/_posts/a.md']='b'.repeat(40);};await p.submit({plans:[{source:'blog/a.md',target:'source/_posts/a.md'}],items:[{path:'source/_posts/a.md',bytes:new TextEncoder().encode('old')}],problems:[],scope:p.key(),config:p.configKey(),assetOwners:{},stateAtPreview:before});assert.equal(writes,0);assert.match(notices.join(' '),/重新预览/);p.onunload();});
 test('两个独立设备通过同步目录共享已核验的发布记录',async()=>{const files=new Map(),folders=new Set(),adapter={exists:async p=>files.has(p)||folders.has(p),mkdir:async p=>{folders.add(p);},write:async(p,v)=>{files.set(p,v);},read:async p=>files.get(p),list:async p=>({files:[...files.keys()].filter(x=>x.startsWith(p+'/')),folders:[]})};
@@ -94,5 +94,18 @@ test('主页发起的修复和连接测试结束后自动返回',async()=>{
  await p.repair(article,true);assert.equal(returns.at(-1),article);
  p.github=()=>({check:async()=>{}});await p.test(true,article);assert.equal(returns.at(-1),article);
  p.github=()=>({check:async()=>{throw Error('连接失败');}});await p.test(true,article);assert.equal(returns.length,3);assert.equal(returns.at(-1),article);
+ p.onunload();
+});
+
+test('声明式设置可搜索且保存格式与旧版一致',async()=>{
+ const x=make(),p=new PluginMain(x.app);p.saveData=async()=>{};await p.onload();
+ const definitions=p.settingTab.getSettingDefinitions();
+ assert.ok(definitions.some(item=>item.control?.key==='repo'&&item.control.type==='text'));
+ assert.ok(definitions.some(item=>item.control?.key==='fluidImages'&&item.control.type==='toggle'));
+ assert.ok(definitions.some(item=>item.name==='GitHub 凭据'&&typeof item.render==='function'));
+ assert.equal(p.settingTab.getControlValue('fields'),p.settings.fields.join(','));
+ await p.settingTab.setControlValue('fields',' title, tags ,, categories ');assert.deepEqual(p.settings.fields,['title','tags','categories']);
+ await p.settingTab.setControlValue('repo',' owner/site ');assert.equal(p.settings.repo,'owner/site');
+ await p.settingTab.setControlValue('fluidImages',false);assert.equal(p.settings.fluidImages,false);
  p.onunload();
 });
