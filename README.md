@@ -1,0 +1,2 @@
+# notebridge
+一键将Obsidian文章发布到你的Hexo博客网站上
