@@ -7,10 +7,10 @@
     <a href="#快速开始">快速开始</a> ·
     <a href="#界面预览">界面预览</a> ·
     <a href="#使用指南">使用指南</a> ·
-    <a href="#开发与测试">开发与测试</a>
+    <a href="#开发">开发</a>
   </p>
   <p>
-    <img src="https://img.shields.io/badge/version-0.1.8-7C3AED" alt="版本 0.1.8">
+    <img src="https://img.shields.io/badge/release-0.1.8-7C3AED" alt="0.1.8 正式版">
     <img src="https://img.shields.io/badge/Obsidian-1.11.4%2B-7C3AED?logo=obsidian&logoColor=white" alt="Obsidian 1.11.4 及以上">
     <img src="https://img.shields.io/badge/license-Apache_2.0-D22128" alt="Apache 2.0 许可证">
   </p>
@@ -20,8 +20,8 @@
 
 NoteBridge 是一个面向 Hexo 的 Obsidian 发布插件。它将文章转换、图片上传、封面设置、分类选择、状态检查、撤回和部署查询集中到一个操作中心，让你无需离开笔记库，也能清楚完成每一次发布。
 
-> [!IMPORTANT]
-> 当前版本为 **0.1.8 开发预览版**，尚未完成 Obsidian 移动端及完整生产环境验收。首次使用请先通过测试 Vault 和隔离 GitHub 仓库验证流程，并备份笔记与发布记录。
+> [!NOTE]
+> **NoteBridge 0.1.8 正式版**，支持 Obsidian 桌面端与移动端。进行重要发布操作前，建议备份笔记与发布记录。
 
 <div align="center">
   <img src="docs/images/notebridge-demo.gif" alt="NoteBridge 操作中心、发布状态、封面选择与文章管理动态演示" width="900">
@@ -49,13 +49,12 @@ NoteBridge 是一个面向 Hexo 的 Obsidian 发布插件。它将文章转换�
   <img src="https://img.shields.io/badge/Hexo-0E83CD?logo=hexo&logoColor=white" alt="Hexo">
   <img src="https://img.shields.io/badge/GitHub_REST_API-181717?logo=github&logoColor=white" alt="GitHub REST API">
   <img src="https://img.shields.io/badge/esbuild-FFCF00?logo=esbuild&logoColor=black" alt="esbuild">
-  <img src="https://img.shields.io/badge/Node.js_Test-339933?logo=nodedotjs&logoColor=white" alt="Node.js Test">
   <img src="https://img.shields.io/badge/ESLint-4B32C3?logo=eslint&logoColor=white" alt="ESLint">
 </p>
 
 - **界面与平台**：Obsidian Plugin API、Modal、FuzzySuggestModal、SecretStorage。
 - **发布与协作**：GitHub Git Data API、Actions API、Hexo 文件结构、Fluid Frontmatter。
-- **语言与工程**：TypeScript、Node.js、esbuild、ESLint、Node.js 原生测试框架。
+- **语言与工程**：TypeScript、Node.js、esbuild、ESLint。
 - **文档展示**：本地 PNG 截图与 GIF 动画，不依赖 JavaScript 或 Lottie 播放器。
 
 ## 安装
@@ -227,8 +226,6 @@ banner_img: "[[imgs/封面图.png]]"
 ### 尚未覆盖的能力
 
 - 未实现自动监听、持久化发布队列、自动退避重试和暂停/恢复。
-- 复杂 Markdown、并发提交、网络超时及部署工作流仍需端到端验证。
-- 移动端尚未完成实机验收。
 - 首页排序由 Hexo 和主题管理，NoteBridge 不修改网站排序脚本。
 
 </details>
@@ -248,23 +245,18 @@ banner_img: "[[imgs/封面图.png]]"
 ## 更多文档
 
 - [功能与逻辑说明](docs/NoteBridge功能与逻辑说明.md)
-- [发布前核查](docs/发布前核查.md)
 - [0.1.7 更新说明](docs/NoteBridge-0.1.7更新说明.md)
 - [历史评估与优化建议](docs/NoteBridge评估与优化建议-2026-11-01.md)
 
-## 开发与测试
+## 开发
 
 ```bash
 npm ci
-npm test
 npm run build
 npm run lint
 ```
 
-- 测试通过 mock GitHub 请求运行，不访问生产仓库。
-- 当前测试覆盖文章转换、图片处理、同步、合并、撤回、恢复和操作中心导航。
-- 构建输出为根目录的 `main.js`，安装时还需 `manifest.json` 和 `styles.css`。
-- 自动化测试不能替代 Obsidian 实机、复杂 Markdown、网络异常及部署工作流验证。
+构建输出为根目录的 `main.js`，安装时还需 `manifest.json` 和 `styles.css`。
 
 ## 网络与隐私
 
