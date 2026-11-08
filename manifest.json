@@ -1,0 +1,10 @@
+{
+  "id": "notebridge",
+  "name": "NoteBridge",
+  "version": "0.1.8",
+  "minAppVersion": "1.11.4",
+  "description": "Publish selected notes and images to a Hexo repository through GitHub.",
+  "author": "Ckxkx",
+  "isDesktopOnly": false,
+  "authorUrl": "https://github.com/Ckxkx"
+}

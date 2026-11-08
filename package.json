@@ -1,0 +1,32 @@
+{
+  "name": "notebridge",
+  "version": "0.1.8",
+  "description": "Obsidian to Hexo publishing plugin",
+  "main": "main.js",
+  "scripts": {
+    "build": "tsc --noEmit && node esbuild.config.mjs",
+    "test": "esbuild src/core.ts --bundle --platform=node --format=cjs --outfile=test/core.cjs && esbuild src/github.ts --bundle --platform=node --format=cjs --external:obsidian --outfile=test/github.cjs && esbuild src/main.ts --bundle --platform=node --format=cjs --external:obsidian --outfile=test/main.cjs && esbuild src/dashboard.ts --bundle --platform=node --format=cjs --outfile=test/dashboard.cjs && esbuild src/categories.ts --bundle --platform=node --format=cjs --outfile=test/categories.cjs && esbuild src/sync.ts --bundle --platform=node --format=cjs --outfile=test/sync.cjs && esbuild src/merge.ts --bundle --platform=node --format=cjs --outfile=test/merge.cjs && node --test test/*.test.cjs",
+    "lint": "eslint src"
+  },
+  "keywords": [],
+  "author": "Ckxkx",
+  "license": "Apache-2.0",
+  "type": "commonjs",
+  "devDependencies": {
+    "@types/markdown-it": "^14.2.0",
+    "@types/node": "^26.6.6",
+    "acorn": "^8.19.0",
+    "esbuild": "^0.28.2",
+    "eslint": "^9.39.5",
+    "eslint-plugin-obsidianmd": "^0.4.2",
+    "markdown-it": "^15.0.3",
+    "obsidian": "^1.14.4",
+    "typescript": "^5.9.3",
+    "yaml": "^2.9.1"
+  },
+  "overrides": {
+    "eslint-plugin-obsidianmd": {
+      "moment": "2.31.0"
+    }
+  }
+}

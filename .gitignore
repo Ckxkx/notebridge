@@ -1,0 +1,9 @@
+node_modules/
+.npm-cache/
+.local/
+release/
+.hexo-verification/
+/site-*/
+lint-results.json
+test/*.cjs
+!test/*.test.cjs

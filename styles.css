@@ -1,0 +1,6 @@
+.notebridge-cover-preview { max-width: 100%; max-height: 240px; object-fit: contain; }
+.notebridge-cover-row { display: flex; align-items: center; gap: 12px; }
+.notebridge-cover-thumbnail { width: 72px; height: 54px; object-fit: contain; flex-shrink: 0; }
+.notebridge-preview-unavailable { visibility: hidden; }
+.notebridge-cover-path { overflow-wrap: anywhere; }
+.notebridge-merge-editor { width: 100%; }

@@ -1,0 +1,5 @@
+const test=require('node:test'),assert=require('node:assert/strict');
+const {categoriesFromArticle,categoryPrefixes}=require('./categories.cjs');
+test('读取 Hexo 单个、层级和多个分类体系',()=>{assert.deepEqual(categoriesFromArticle('---\ncategories: 科技\n---\n正文'),[['科技']]);assert.deepEqual(categoriesFromArticle('---\ncategories: [技术, 编程]\n---\n正文'),[['技术','编程']]);assert.deepEqual(categoriesFromArticle('---\ncategories:\n  - [技术, 编程]\n  - [生活, 美食]\n  - 阅读\n---\n正文'),[['技术','编程'],['生活','美食'],['阅读']]);});
+test('默认不猜测没有分类的文件并显示分类层级',()=>{assert.deepEqual(categoriesFromArticle('没有 frontmatter'),[]);assert.deepEqual(categoriesFromArticle('---\npublished: false\ncategories: 秘密\n---\n内容'),[]);assert.deepEqual(categoryPrefixes([['技术','编程'],['技术','AI']]).map(x=>x.join('/')).sort(),['技术','技术/AI','技术/编程']);assert.throws(()=>categoriesFromArticle('---\ncategories: [broken\n---\n正文'));});
+test('本地草稿仍能查看既有分类',()=>{const text='---\npublished: false\ncategories: 科技\n---\n正文';assert.deepEqual(categoriesFromArticle(text),[]);assert.deepEqual(categoriesFromArticle(text,true),[['科技']]);});
