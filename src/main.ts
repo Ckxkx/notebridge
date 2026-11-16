@@ -2,7 +2,7 @@ import { App, ButtonComponent, FuzzyMatch, FuzzySuggestModal, Modal, Notice, Pla
 import { Config, Plan, assertUploadSafe, cleanPath, ensureIdentity, isArticle, noteIdentity, prepare, within } from './core';
 import { Github, Item, blobHash } from './github';
 import { ArticleStatus, localLabel, remoteLabel, remoteStatus } from './dashboard';
-import { applyCover, coverReference, CoverDestination } from './cover';
+import { applyCover, articleCoverImages, ArticleCoverImage, coverLinkReference, coverReference, CoverDestination } from './cover';
 import { categoriesFromArticle, categoryPrefixes, CategoryPath } from './categories';
 import { mergeRecords, Overlay, renameRecords, resolveRenamedPath, SyncState, WithdrawalEvent } from './sync';
 import { mergeThreeWay } from './merge';
@@ -216,13 +216,13 @@ export default class NoteBridge extends Plugin {
   if(!this.settings.fluidImages){new Notice('请先在 NoteBridge 设置中开启 Fluid 文章封面和头图');return;}
   new CoverModal(this.app,this,file).open();
  }
- async saveCover(file:TFile,image:TFile,destination:CoverDestination){
+ async saveCover(file:TFile,image:TFile|string,destination:CoverDestination){
   try {
    if(this.stopped)throw new Error('插件已停用');
    if(!this.settings.fluidImages)throw new Error('请先开启 Fluid 文章封面和头图');
    if(this.app.vault.getAbstractFileByPath(file.path)!==file||!isArticle(file.path,this.settings.root))throw new Error('文章已不存在或不在发布目录内');
-   if(this.app.vault.getAbstractFileByPath(image.path)!==image)throw new Error('图片已不存在，请重新选择');
-   const reference=coverReference(image.path,this.settings);
+   if(typeof image!=='string'&&this.app.vault.getAbstractFileByPath(image.path)!==image)throw new Error('图片已不存在，请重新选择');
+   const reference=typeof image==='string'?coverLinkReference(image):coverReference(image.path,this.settings);
    await this.app.fileManager.processFrontMatter(file,(fm:unknown)=>{if(!fm||typeof fm!=='object'||Array.isArray(fm))throw new Error('文章属性格式无效');applyCover(fm as Record<string,unknown>,reference,destination);});
    if(!this.stopped)new Notice('封面已写入本地文章属性；请预览并发布以更新网站',8000);return true;
   }catch(e){if(!this.stopped)new Notice(`无法设置封面：${String(e)}`,10000);return false;}
@@ -511,7 +511,7 @@ class ControlCenterModal extends Modal {
   const action=(title:string,description:string,label:string,run:()=>void,needsFile=false)=>new Setting(el).setName(title).setDesc(description).addButton(b=>b.setButtonText(label).setDisabled(needsFile&&!valid).onClick(()=>{this.close();run();}));
   el.createEl('h3',{text:'日常发布'});
   action('预览并发布当前文章','检查上传内容与图片，确认后提交。','打开',()=>{if(valid)void this.plugin.preview(true,valid);},true);
-  action('文章封面和头图','选择本地图片并写入文章属性。','选择',()=>{if(valid)this.plugin.openCoverPicker(valid);},true);
+  action('文章封面和头图','从正文选图、粘贴图床链接或选择本地图片。','选择',()=>{if(valid)this.plugin.openCoverPicker(valid);},true);
   action('分类和文章目录','从网站现有分类与目录中选择。','选择',()=>{if(valid)this.plugin.openCategoryPicker(valid);},true);
   action('发布问题','遇到问题时点这里，插件会自动检查并修复。','一键修复',()=>void this.plugin.repair(valid,true));
   action('文章发布状态','查看本地变化及只读核验 GitHub。','查看',()=>new ArticleStatusModal(this.app,this.plugin).open());
@@ -603,31 +603,73 @@ class DirectorySuggestModal extends FuzzySuggestModal<string>{
  getItems(){return this.paths;}getItemText(path:string){return path;}onChooseItem(path:string){this.select(path);}
 }
 class CoverModal extends Modal {
- private closed=false;private selected?:TFile; private destination:CoverDestination='index'; private label!:HTMLElement; private preview!:HTMLElement;
+ private closed=false;private selected?:TFile; private destination:CoverDestination='index'; private preview!:HTMLElement;
  constructor(app:App,private plugin:NoteBridge,private file:TFile){super(app);}
  onOpen(){
   const el=this.contentEl;el.createEl('h2',{text:'选择文章封面'});
   el.createEl('p',{text:`文章：${this.file.path}`});
-  el.createEl('p',{text:'从发布目录内的 imgs 文件夹选择图片。保存会修改这篇本地文章的属性，替换所选位置原有的图片；不会立即上传。'});
+  el.createEl('p',{text:'正文图片上传好后，点「从正文选图」即可直接使用。保存会替换所选位置的文章属性。'});
   new Setting(el).setName('设置位置').addDropdown(d=>d.addOption('index','首页文章封面').addOption('banner','文章页头图').addOption('both','封面和头图都使用').setValue(this.destination).onChange(v=>{if(v==='index'||v==='banner'||v==='both')this.destination=v;}));
-  this.label=el.createEl('p',{text:'尚未选择图片'});
+  const sourceSetting=new Setting(el).setName('选取图片');
+  const linkSetting=new Setting(el).setName('图片链接');
+  const link=linkSetting.controlEl.createEl('input',{type:'text',placeholder:'https://…',attr:{'aria-label':'图片链接'}});
+  linkSetting.addButton(b=>b.setButtonText('预览链接').onClick(()=>{
+   try{this.showPreview(coverLinkReference(link.value),'无法加载预览，请检查链接能否公开访问。');}
+   catch(e){new Notice(e instanceof Error?e.message:String(e));}
+  }));
+  const label=el.createEl('p');
   this.preview=el.createDiv();
-  new Setting(el).addButton(b=>b.setButtonText('选择图片').onClick(()=>{
+  link.oninput=()=>{this.selected=undefined;label.setText('');this.preview.empty();};
+  const chooseArticleImage=(image:ArticleCoverImage)=>{
+   if(this.closed)return;
+   this.selected=undefined;link.value=image.url;label.setText(image.alt?`来自正文：${image.alt}`:'已选用正文图片');
+   this.showPreview(image.url,'无法加载预览，请检查链接能否公开访问。');
+  };
+  sourceSetting.addButton(b=>b.setButtonText('从正文选图').onClick(async()=>{
+   b.setDisabled(true);
+   try{
+    const images=articleCoverImages(await this.app.vault.read(this.file));
+    if(this.closed)return;
+    if(images.length===0)new Notice('正文里没有可选的图床图片。请先保存上传后的文章，或直接粘贴图片链接。');
+    else if(images.length===1)chooseArticleImage(images[0]);
+    else new ArticleCoverSuggestModal(this.app,images,chooseArticleImage).open();
+   }catch(e){if(!this.closed)new Notice(`无法读取正文图片：${e instanceof Error?e.message:String(e)}`);}
+   finally{if(!this.closed)b.setDisabled(false);}
+  })).addButton(b=>b.setButtonText('选择本地图片').onClick(()=>{
    const files=this.app.vault.getFiles().filter(f=>{try{coverReference(f.path,this.plugin.settings);return true;}catch{return false;}});
    if(!files.length){new Notice('没有可用图片，请先把图片放入发布目录内的 imgs 文件夹');return;}
-   new CoverImageSuggestModal(this.app,files,image=>{this.selected=image;this.label.setText(`已选择：${image.path}`);this.preview.empty();const img=this.preview.createEl('img',{cls:'notebridge-cover-preview',attr:{src:this.app.vault.getResourcePath(image),alt:'所选封面的预览'}});img.onerror=()=>{if(this.selected!==image||!this.preview.contains(img))return;this.preview.empty();this.preview.createEl('p',{text:'无法加载图片预览，请检查图片文件。'});};}).open();
-  })).addButton(b=>b.setButtonText('返回主页').onClick(()=>{this.close();this.plugin.openControlCenter(this.file);})).addButton(b=>b.setButtonText('保存并返回').setCta().onClick(()=>{if(!this.selected){new Notice('请先选择图片');return;}const image=this.selected;void this.plugin.saveCover(this.file,image,this.destination).then(ok=>{if(ok&&!this.closed){this.close();this.plugin.openControlCenter(this.file);}});}));
+   new CoverImageSuggestModal(this.app,files,image=>{this.selected=image;link.value='';label.setText(`已选择：${image.path}`);this.showPreview(this.app.vault.getResourcePath(image),'无法加载图片预览，请检查图片文件。');}).open();
+  }));
+  new Setting(el).addButton(b=>b.setButtonText('返回主页').onClick(()=>{this.close();this.plugin.openControlCenter(this.file);})).addButton(b=>b.setButtonText('保存并返回').setCta().onClick(()=>{
+   const image=link.value.trim()||this.selected;if(!image){new Notice('请先选图或粘贴图片链接');return;}
+   b.setDisabled(true);void this.plugin.saveCover(this.file,image,this.destination).then(ok=>{if(this.closed)return;if(ok){this.close();this.plugin.openControlCenter(this.file);}else b.setDisabled(false);});
+  }));
+ }
+ private showPreview(src:string,error:string){
+  this.preview.empty();const img=this.preview.createEl('img',{cls:'notebridge-cover-preview',attr:{referrerpolicy:'no-referrer',alt:'所选封面的预览'}});
+  img.onerror=()=>{if(this.closed||!this.preview.contains(img))return;this.preview.empty();this.preview.createEl('p',{text:error});};
+  img.src=src;
  }
  onClose(){this.closed=true;this.contentEl.empty();}
+}
+function renderCoverThumbnail(el:HTMLElement,src:string,label:string):void{
+ const row=el.createDiv({cls:'notebridge-cover-row'});
+ const img=row.createEl('img',{cls:'notebridge-cover-thumbnail',attr:{src,alt:'',loading:'lazy',referrerpolicy:'no-referrer'}});img.onerror=()=>{img.addClass('notebridge-preview-unavailable');};
+ row.createSpan({cls:'notebridge-cover-path',text:label});
+}
+class ArticleCoverSuggestModal extends FuzzySuggestModal<ArticleCoverImage>{
+ constructor(app:App,private images:ArticleCoverImage[],private select:(image:ArticleCoverImage)=>void){super(app);this.setPlaceholder('搜索正文图片名称或链接');}
+ getItems(){return this.images;}
+ getItemText(image:ArticleCoverImage){return image.alt?`${image.alt} ${image.url}`:image.url;}
+ renderSuggestion(match:FuzzyMatch<ArticleCoverImage>,el:HTMLElement):void{renderCoverThumbnail(el,match.item.url,match.item.alt||match.item.url);}
+ onChooseItem(image:ArticleCoverImage):void{this.select(image);}
 }
 class CoverImageSuggestModal extends FuzzySuggestModal<TFile> {
  constructor(app:App,private files:TFile[],private select:(file:TFile)=>void){super(app);this.setPlaceholder('搜索图片名称或路径');}
  getItems():TFile[]{return this.files;}
  getItemText(file:TFile):string{return file.path;}
  renderSuggestion(match:FuzzyMatch<TFile>,el:HTMLElement):void{
-  const row=el.createDiv({cls:'notebridge-cover-row'});
-  const img=row.createEl('img',{cls:'notebridge-cover-thumbnail',attr:{src:this.app.vault.getResourcePath(match.item),alt:'',loading:'lazy'}});img.onerror=()=>{img.addClass('notebridge-preview-unavailable');};
-  row.createSpan({cls:'notebridge-cover-path',text:match.item.path});
+  renderCoverThumbnail(el,this.app.vault.getResourcePath(match.item),match.item.path);
  }
  onChooseItem(file:TFile):void{this.select(file);}
 }

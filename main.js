@@ -11835,6 +11835,7 @@ function stringify3(value, replacer, options) {
 
 // src/core.ts
 var md = new MarkdownItCallable();
+var httpImage = /^https?:\/\//i;
 function cleanPath(s) {
   const parts = [];
   for (const part of s.replace(/\\/g, "/").split("/")) {
@@ -11860,6 +11861,17 @@ function imageTarget(path, c) {
   const i = parts.lastIndexOf("imgs");
   if (i < 0 || i === parts.length - 1 || !/\.(png|jpe?g|gif|webp|svg|avif)$/i.test(path)) throw new Error(`\u56FE\u7247\u4E0D\u5728 imgs \u76EE\u5F55\u6216\u7C7B\u578B\u4E0D\u5141\u8BB8\uFF1A${path}`);
   return cleanPath([c.images, ...parts.slice(0, i), ...parts.slice(i + 1)].join("/"));
+}
+function coverImageUrl(input) {
+  const ref = input.trim();
+  try {
+    if (/^https?:\/\/[^/?#]/i.test(ref) && !/[\s\\]/.test(ref)) {
+      const parsed = new URL(ref);
+      if (parsed.hostname && !parsed.username && !parsed.password) return ref;
+    }
+  } catch {
+  }
+  throw new Error("\u8BF7\u8F93\u5165\u6709\u6548\u7684 HTTP(S) \u56FE\u7247\u76F4\u94FE");
 }
 function url(path, root) {
   return "/" + [cleanPath(root), ...cleanPath(path).split("/")].filter(Boolean).map(encodeURIComponent).join("/");
@@ -11958,6 +11970,9 @@ function assertUploadSafe(text2) {
   for (const key of ["notebridge_id", "draft", "publish", "published"]) if (Object.prototype.hasOwnProperty.call(parsed.fm, key)) throw new Error(`\u4E0A\u4F20\u526F\u672C\u542B\u5185\u90E8\u5B57\u6BB5 ${key}\uFF0C\u8BF7\u5148\u79FB\u9664`);
   if (stripComments(parsed.body).warnings.length) throw new Error("\u5408\u5E76\u540E\u7684\u4E0A\u4F20\u526F\u672C\u542B\u9690\u85CF\u6CE8\u91CA\uFF0C\u8BF7\u5148\u79FB\u9664\u540E\u91CD\u65B0\u9884\u89C8");
 }
+function visibleArticleBody(text2) {
+  return stripComments(frontmatter(text2).body).body;
+}
 function prepare(source, text2, c, date, resolve, targetOverride) {
   if (!isArticle(source, c.root)) throw new Error("\u6587\u4EF6\u4E0D\u5C5E\u4E8E\u53D1\u5E03\u8303\u56F4");
   const parsed = frontmatter(text2), fm = parsed.fm;
@@ -11969,7 +11984,6 @@ function prepare(source, text2, c, date, resolve, targetOverride) {
   for (const key of ["cover", "banner", "thumbnail"]) if (key in out) throw new Error(`\u6682\u4E0D\u652F\u6301\u516C\u5F00\u5B57\u6BB5 ${key} \u4E2D\u7684\u56FE\u7247\uFF0C\u8BF7\u79FB\u9664\u6216\u5173\u95ED\u8BE5\u5B57\u6BB5`);
   const assets = [];
   const imageUrl = (reference2) => {
-    if (/^https?:\/\//i.test(reference2)) return reference2;
     let ref = reference2;
     try {
       ref = decodeURIComponent(ref.replace(/^<|>$/g, ""));
@@ -12001,9 +12015,9 @@ function prepare(source, text2, c, date, resolve, targetOverride) {
         if (wiki[1].includes("|")) throw new Error(`${key} \u4E0D\u652F\u6301\u522B\u540D\u6216\u5C3A\u5BF8\uFF0C\u8BF7\u53EA\u586B\u5199\u56FE\u7247\u8DEF\u5F84`);
         if (wiki[1].includes("[") || wiki[1].includes("]")) throw new Error(`${key} \u56FE\u7247\u94FE\u63A5\u683C\u5F0F\u4E0D\u652F\u6301`);
         ref = wiki[1].trim();
-      } else if (ref.includes("[") || ref.includes("]")) throw new Error(`${key} \u56FE\u7247\u94FE\u63A5\u683C\u5F0F\u4E0D\u652F\u6301`);
+      } else if (!httpImage.test(ref) && (ref.includes("[") || ref.includes("]"))) throw new Error(`${key} \u56FE\u7247\u94FE\u63A5\u683C\u5F0F\u4E0D\u652F\u6301`);
       try {
-        out[key] = imageUrl(ref);
+        out[key] = httpImage.test(ref) ? coverImageUrl(ref) : imageUrl(ref);
       } catch (e) {
         throw new Error(`${key}\uFF1A${e instanceof Error ? e.message : String(e)}`);
       }
@@ -12029,7 +12043,7 @@ function prepare(source, text2, c, date, resolve, targetOverride) {
       if (slashCount % 2 === 1) continue;
       const wiki = m[1] !== void 0;
       let ref = wiki ? m[1].split("|")[0] : m[3];
-      if (/^https?:\/\//i.test(ref)) continue;
+      if (httpImage.test(ref)) continue;
       const converted = imageUrl(ref);
       const alt = wiki ? (m[1].split("|")[1] || "").replace(/^\d+(?:x\d+)?$/, "") : m[2];
       changes.push({ start: m.index, end: m.index + m[0].length, value: `![${alt}](${converted})` });
@@ -12220,6 +12234,35 @@ function remoteLabel(state) {
 }
 
 // src/cover.ts
+var coverMarkdown = new MarkdownItCallable();
+coverMarkdown.normalizeLink = (url2) => url2;
+function coverLinkReference(input) {
+  const text2 = input.trim();
+  if (!text2.startsWith("![")) return coverImageUrl(text2);
+  const tokens = coverMarkdown.parseInline(text2, {})[0]?.children;
+  if (tokens?.length !== 1 || tokens[0].type !== "image") throw new Error("\u8BF7\u7C98\u8D34\u5355\u4E2A\u56FE\u7247\u94FE\u63A5\u6216 Markdown \u56FE\u7247");
+  const src = tokens[0].attrGet("src");
+  return coverImageUrl(typeof src === "string" ? src : "");
+}
+function articleCoverImages(text2) {
+  const found = /* @__PURE__ */ new Map();
+  for (const block2 of coverMarkdown.parse(visibleArticleBody(text2), {})) {
+    if (block2.type !== "inline") continue;
+    for (const token of block2.children ?? []) {
+      if (token.type !== "image") continue;
+      const src = token.attrGet("src");
+      if (typeof src !== "string" || !/^https?:\/\//i.test(src)) continue;
+      let url2;
+      try {
+        url2 = coverImageUrl(src);
+      } catch {
+        continue;
+      }
+      if (!found.has(url2)) found.set(url2, { url: url2, alt: token.content.trim() });
+    }
+  }
+  return [...found.values()];
+}
 function coverReference(path, config2) {
   imageTarget(path, config2);
   if (["[", "]", "|", "#", "?", "%"].some((char) => path.includes(char))) throw new Error("\u56FE\u7247\u8DEF\u5F84\u5305\u542B\u6682\u4E0D\u652F\u6301\u7684\u7279\u6B8A\u5B57\u7B26\uFF08[ ] | # ? %\uFF09\uFF0C\u8BF7\u5148\u91CD\u547D\u540D");
@@ -13035,8 +13078,8 @@ var NoteBridge = class extends import_obsidian2.Plugin {
       if (this.stopped) throw new Error("\u63D2\u4EF6\u5DF2\u505C\u7528");
       if (!this.settings.fluidImages) throw new Error("\u8BF7\u5148\u5F00\u542F Fluid \u6587\u7AE0\u5C01\u9762\u548C\u5934\u56FE");
       if (this.app.vault.getAbstractFileByPath(file.path) !== file || !isArticle(file.path, this.settings.root)) throw new Error("\u6587\u7AE0\u5DF2\u4E0D\u5B58\u5728\u6216\u4E0D\u5728\u53D1\u5E03\u76EE\u5F55\u5185");
-      if (this.app.vault.getAbstractFileByPath(image2.path) !== image2) throw new Error("\u56FE\u7247\u5DF2\u4E0D\u5B58\u5728\uFF0C\u8BF7\u91CD\u65B0\u9009\u62E9");
-      const reference2 = coverReference(image2.path, this.settings);
+      if (typeof image2 !== "string" && this.app.vault.getAbstractFileByPath(image2.path) !== image2) throw new Error("\u56FE\u7247\u5DF2\u4E0D\u5B58\u5728\uFF0C\u8BF7\u91CD\u65B0\u9009\u62E9");
+      const reference2 = typeof image2 === "string" ? coverLinkReference(image2) : coverReference(image2.path, this.settings);
       await this.app.fileManager.processFrontMatter(file, (fm) => {
         if (!fm || typeof fm !== "object" || Array.isArray(fm)) throw new Error("\u6587\u7AE0\u5C5E\u6027\u683C\u5F0F\u65E0\u6548");
         applyCover(fm, reference2, destination);
@@ -13745,7 +13788,7 @@ var ControlCenterModal = class extends import_obsidian2.Modal {
     action("\u9884\u89C8\u5E76\u53D1\u5E03\u5F53\u524D\u6587\u7AE0", "\u68C0\u67E5\u4E0A\u4F20\u5185\u5BB9\u4E0E\u56FE\u7247\uFF0C\u786E\u8BA4\u540E\u63D0\u4EA4\u3002", "\u6253\u5F00", () => {
       if (valid) void this.plugin.preview(true, valid);
     }, true);
-    action("\u6587\u7AE0\u5C01\u9762\u548C\u5934\u56FE", "\u9009\u62E9\u672C\u5730\u56FE\u7247\u5E76\u5199\u5165\u6587\u7AE0\u5C5E\u6027\u3002", "\u9009\u62E9", () => {
+    action("\u6587\u7AE0\u5C01\u9762\u548C\u5934\u56FE", "\u4ECE\u6B63\u6587\u9009\u56FE\u3001\u7C98\u8D34\u56FE\u5E8A\u94FE\u63A5\u6216\u9009\u62E9\u672C\u5730\u56FE\u7247\u3002", "\u9009\u62E9", () => {
       if (valid) this.plugin.openCoverPicker(valid);
     }, true);
     action("\u5206\u7C7B\u548C\u6587\u7AE0\u76EE\u5F55", "\u4ECE\u7F51\u7AD9\u73B0\u6709\u5206\u7C7B\u4E0E\u76EE\u5F55\u4E2D\u9009\u62E9\u3002", "\u9009\u62E9", () => {
@@ -14120,13 +14163,48 @@ var CoverModal = class extends import_obsidian2.Modal {
     const el = this.contentEl;
     el.createEl("h2", { text: "\u9009\u62E9\u6587\u7AE0\u5C01\u9762" });
     el.createEl("p", { text: `\u6587\u7AE0\uFF1A${this.file.path}` });
-    el.createEl("p", { text: "\u4ECE\u53D1\u5E03\u76EE\u5F55\u5185\u7684 imgs \u6587\u4EF6\u5939\u9009\u62E9\u56FE\u7247\u3002\u4FDD\u5B58\u4F1A\u4FEE\u6539\u8FD9\u7BC7\u672C\u5730\u6587\u7AE0\u7684\u5C5E\u6027\uFF0C\u66FF\u6362\u6240\u9009\u4F4D\u7F6E\u539F\u6709\u7684\u56FE\u7247\uFF1B\u4E0D\u4F1A\u7ACB\u5373\u4E0A\u4F20\u3002" });
+    el.createEl("p", { text: "\u6B63\u6587\u56FE\u7247\u4E0A\u4F20\u597D\u540E\uFF0C\u70B9\u300C\u4ECE\u6B63\u6587\u9009\u56FE\u300D\u5373\u53EF\u76F4\u63A5\u4F7F\u7528\u3002\u4FDD\u5B58\u4F1A\u66FF\u6362\u6240\u9009\u4F4D\u7F6E\u7684\u6587\u7AE0\u5C5E\u6027\u3002" });
     new import_obsidian2.Setting(el).setName("\u8BBE\u7F6E\u4F4D\u7F6E").addDropdown((d) => d.addOption("index", "\u9996\u9875\u6587\u7AE0\u5C01\u9762").addOption("banner", "\u6587\u7AE0\u9875\u5934\u56FE").addOption("both", "\u5C01\u9762\u548C\u5934\u56FE\u90FD\u4F7F\u7528").setValue(this.destination).onChange((v) => {
       if (v === "index" || v === "banner" || v === "both") this.destination = v;
     }));
-    this.label = el.createEl("p", { text: "\u5C1A\u672A\u9009\u62E9\u56FE\u7247" });
+    const sourceSetting = new import_obsidian2.Setting(el).setName("\u9009\u53D6\u56FE\u7247");
+    const linkSetting = new import_obsidian2.Setting(el).setName("\u56FE\u7247\u94FE\u63A5");
+    const link2 = linkSetting.controlEl.createEl("input", { type: "text", placeholder: "https://\u2026", attr: { "aria-label": "\u56FE\u7247\u94FE\u63A5" } });
+    linkSetting.addButton((b) => b.setButtonText("\u9884\u89C8\u94FE\u63A5").onClick(() => {
+      try {
+        this.showPreview(coverLinkReference(link2.value), "\u65E0\u6CD5\u52A0\u8F7D\u9884\u89C8\uFF0C\u8BF7\u68C0\u67E5\u94FE\u63A5\u80FD\u5426\u516C\u5F00\u8BBF\u95EE\u3002");
+      } catch (e) {
+        new import_obsidian2.Notice(e instanceof Error ? e.message : String(e));
+      }
+    }));
+    const label = el.createEl("p");
     this.preview = el.createDiv();
-    new import_obsidian2.Setting(el).addButton((b) => b.setButtonText("\u9009\u62E9\u56FE\u7247").onClick(() => {
+    link2.oninput = () => {
+      this.selected = void 0;
+      label.setText("");
+      this.preview.empty();
+    };
+    const chooseArticleImage = (image2) => {
+      if (this.closed) return;
+      this.selected = void 0;
+      link2.value = image2.url;
+      label.setText(image2.alt ? `\u6765\u81EA\u6B63\u6587\uFF1A${image2.alt}` : "\u5DF2\u9009\u7528\u6B63\u6587\u56FE\u7247");
+      this.showPreview(image2.url, "\u65E0\u6CD5\u52A0\u8F7D\u9884\u89C8\uFF0C\u8BF7\u68C0\u67E5\u94FE\u63A5\u80FD\u5426\u516C\u5F00\u8BBF\u95EE\u3002");
+    };
+    sourceSetting.addButton((b) => b.setButtonText("\u4ECE\u6B63\u6587\u9009\u56FE").onClick(async () => {
+      b.setDisabled(true);
+      try {
+        const images = articleCoverImages(await this.app.vault.read(this.file));
+        if (this.closed) return;
+        if (images.length === 0) new import_obsidian2.Notice("\u6B63\u6587\u91CC\u6CA1\u6709\u53EF\u9009\u7684\u56FE\u5E8A\u56FE\u7247\u3002\u8BF7\u5148\u4FDD\u5B58\u4E0A\u4F20\u540E\u7684\u6587\u7AE0\uFF0C\u6216\u76F4\u63A5\u7C98\u8D34\u56FE\u7247\u94FE\u63A5\u3002");
+        else if (images.length === 1) chooseArticleImage(images[0]);
+        else new ArticleCoverSuggestModal(this.app, images, chooseArticleImage).open();
+      } catch (e) {
+        if (!this.closed) new import_obsidian2.Notice(`\u65E0\u6CD5\u8BFB\u53D6\u6B63\u6587\u56FE\u7247\uFF1A${e instanceof Error ? e.message : String(e)}`);
+      } finally {
+        if (!this.closed) b.setDisabled(false);
+      }
+    })).addButton((b) => b.setButtonText("\u9009\u62E9\u672C\u5730\u56FE\u7247").onClick(() => {
       const files = this.app.vault.getFiles().filter((f) => {
         try {
           coverReference(f.path, this.plugin.settings);
@@ -14141,35 +14219,71 @@ var CoverModal = class extends import_obsidian2.Modal {
       }
       new CoverImageSuggestModal(this.app, files, (image2) => {
         this.selected = image2;
-        this.label.setText(`\u5DF2\u9009\u62E9\uFF1A${image2.path}`);
-        this.preview.empty();
-        const img = this.preview.createEl("img", { cls: "notebridge-cover-preview", attr: { src: this.app.vault.getResourcePath(image2), alt: "\u6240\u9009\u5C01\u9762\u7684\u9884\u89C8" } });
-        img.onerror = () => {
-          if (this.selected !== image2 || !this.preview.contains(img)) return;
-          this.preview.empty();
-          this.preview.createEl("p", { text: "\u65E0\u6CD5\u52A0\u8F7D\u56FE\u7247\u9884\u89C8\uFF0C\u8BF7\u68C0\u67E5\u56FE\u7247\u6587\u4EF6\u3002" });
-        };
+        link2.value = "";
+        label.setText(`\u5DF2\u9009\u62E9\uFF1A${image2.path}`);
+        this.showPreview(this.app.vault.getResourcePath(image2), "\u65E0\u6CD5\u52A0\u8F7D\u56FE\u7247\u9884\u89C8\uFF0C\u8BF7\u68C0\u67E5\u56FE\u7247\u6587\u4EF6\u3002");
       }).open();
-    })).addButton((b) => b.setButtonText("\u8FD4\u56DE\u4E3B\u9875").onClick(() => {
+    }));
+    new import_obsidian2.Setting(el).addButton((b) => b.setButtonText("\u8FD4\u56DE\u4E3B\u9875").onClick(() => {
       this.close();
       this.plugin.openControlCenter(this.file);
     })).addButton((b) => b.setButtonText("\u4FDD\u5B58\u5E76\u8FD4\u56DE").setCta().onClick(() => {
-      if (!this.selected) {
-        new import_obsidian2.Notice("\u8BF7\u5148\u9009\u62E9\u56FE\u7247");
+      const image2 = link2.value.trim() || this.selected;
+      if (!image2) {
+        new import_obsidian2.Notice("\u8BF7\u5148\u9009\u56FE\u6216\u7C98\u8D34\u56FE\u7247\u94FE\u63A5");
         return;
       }
-      const image2 = this.selected;
+      b.setDisabled(true);
       void this.plugin.saveCover(this.file, image2, this.destination).then((ok) => {
-        if (ok && !this.closed) {
+        if (this.closed) return;
+        if (ok) {
           this.close();
           this.plugin.openControlCenter(this.file);
-        }
+        } else b.setDisabled(false);
       });
     }));
+  }
+  showPreview(src, error2) {
+    this.preview.empty();
+    const img = this.preview.createEl("img", { cls: "notebridge-cover-preview", attr: { referrerpolicy: "no-referrer", alt: "\u6240\u9009\u5C01\u9762\u7684\u9884\u89C8" } });
+    img.onerror = () => {
+      if (this.closed || !this.preview.contains(img)) return;
+      this.preview.empty();
+      this.preview.createEl("p", { text: error2 });
+    };
+    img.src = src;
   }
   onClose() {
     this.closed = true;
     this.contentEl.empty();
+  }
+};
+function renderCoverThumbnail(el, src, label) {
+  const row = el.createDiv({ cls: "notebridge-cover-row" });
+  const img = row.createEl("img", { cls: "notebridge-cover-thumbnail", attr: { src, alt: "", loading: "lazy", referrerpolicy: "no-referrer" } });
+  img.onerror = () => {
+    img.addClass("notebridge-preview-unavailable");
+  };
+  row.createSpan({ cls: "notebridge-cover-path", text: label });
+}
+var ArticleCoverSuggestModal = class extends import_obsidian2.FuzzySuggestModal {
+  constructor(app, images, select) {
+    super(app);
+    this.images = images;
+    this.select = select;
+    this.setPlaceholder("\u641C\u7D22\u6B63\u6587\u56FE\u7247\u540D\u79F0\u6216\u94FE\u63A5");
+  }
+  getItems() {
+    return this.images;
+  }
+  getItemText(image2) {
+    return image2.alt ? `${image2.alt} ${image2.url}` : image2.url;
+  }
+  renderSuggestion(match, el) {
+    renderCoverThumbnail(el, match.item.url, match.item.alt || match.item.url);
+  }
+  onChooseItem(image2) {
+    this.select(image2);
   }
 };
 var CoverImageSuggestModal = class extends import_obsidian2.FuzzySuggestModal {
@@ -14186,12 +14300,7 @@ var CoverImageSuggestModal = class extends import_obsidian2.FuzzySuggestModal {
     return file.path;
   }
   renderSuggestion(match, el) {
-    const row = el.createDiv({ cls: "notebridge-cover-row" });
-    const img = row.createEl("img", { cls: "notebridge-cover-thumbnail", attr: { src: this.app.vault.getResourcePath(match.item), alt: "", loading: "lazy" } });
-    img.onerror = () => {
-      img.addClass("notebridge-preview-unavailable");
-    };
-    row.createSpan({ cls: "notebridge-cover-path", text: match.item.path });
+    renderCoverThumbnail(el, this.app.vault.getResourcePath(match.item), match.item.path);
   }
   onChooseItem(file) {
     this.select(file);

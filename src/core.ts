@@ -5,6 +5,7 @@ export interface Config { root: string; posts: string; images: string; siteRoot:
 export interface Asset { source: string; target: string }
 export interface Plan { source: string; target: string; content: string; assets: Asset[]; warnings: string[] }
 const md = new MarkdownIt();
+const httpImage = /^https?:\/\//i;
 export function cleanPath(s: string): string {
   const parts: string[] = [];
   for (const part of s.replace(/\\/g, '/').split('/')) {
@@ -24,6 +25,16 @@ export function imageTarget(path: string, c: Config): string {
   const i=parts.lastIndexOf('imgs');
   if (i<0 || i===parts.length-1 || !/\.(png|jpe?g|gif|webp|svg|avif)$/i.test(path)) throw new Error(`图片不在 imgs 目录或类型不允许：${path}`);
   return cleanPath([c.images,...parts.slice(0,i),...parts.slice(i+1)].join('/'));
+}
+export function coverImageUrl(input:string):string {
+  const ref=input.trim();
+  try {
+    if(/^https?:\/\/[^/?#]/i.test(ref)&&!/[\s\\]/.test(ref)){
+      const parsed=new URL(ref);
+      if(parsed.hostname&&!parsed.username&&!parsed.password)return ref;
+    }
+  } catch { /* use the same message for parsing and validation failures */ }
+  throw new Error('请输入有效的 HTTP(S) 图片直链');
 }
 function url(path:string, root:string):string { return '/' + [cleanPath(root),...cleanPath(path).split('/')].filter(Boolean).map(encodeURIComponent).join('/'); }
 function frontmatter(text:string):{fm:Record<string,unknown>;body:string} {
@@ -73,6 +84,9 @@ export function assertUploadSafe(text:string):void {
  const parsed=frontmatter(text);for(const key of ['notebridge_id','draft','publish','published'])if(Object.prototype.hasOwnProperty.call(parsed.fm,key))throw new Error(`上传副本含内部字段 ${key}，请先移除`);
  if(stripComments(parsed.body).warnings.length)throw new Error('合并后的上传副本含隐藏注释，请先移除后重新预览');
 }
+export function visibleArticleBody(text:string):string {
+ return stripComments(frontmatter(text).body).body;
+}
 export function prepare(source:string, text:string, c:Config, date:string, resolve:(link:string,source:string)=>string|null, targetOverride?:string):Plan | null {
   if (!isArticle(source,c.root)) throw new Error('文件不属于发布范围');
   const parsed=frontmatter(text),fm=parsed.fm;
@@ -83,7 +97,6 @@ export function prepare(source:string, text:string, c:Config, date:string, resol
   for (const key of ['cover','banner','thumbnail']) if (key in out) throw new Error(`暂不支持公开字段 ${key} 中的图片，请移除或关闭该字段`);
   const assets:Asset[]=[];
   const imageUrl=(reference:string):string=>{
-    if(/^https?:\/\//i.test(reference))return reference;
     let ref=reference;
     try { ref=decodeURIComponent(ref.replace(/^<|>$/g,'')); } catch { throw new Error(`图片路径编码无效：${ref}`); }
     if (/^[a-z][a-z0-9+.-]*:/i.test(ref)||ref.startsWith('/')||/[#?]/.test(ref)) throw new Error(`不支持该本地图片路径：${ref}；请使用 imgs 内的相对路径或 HTTP(S) 链接`);
@@ -99,8 +112,8 @@ export function prepare(source:string, text:string, c:Config, date:string, resol
       let ref=value.trim();if(!ref){out[key]='';continue;}
       const wiki=/^!?\[\[(.+?)\]\]$/.exec(ref);
       if(wiki){if(wiki[1].includes('|'))throw new Error(`${key} 不支持别名或尺寸，请只填写图片路径`);if(wiki[1].includes('[')||wiki[1].includes(']'))throw new Error(`${key} 图片链接格式不支持`);ref=wiki[1].trim();}
-      else if(ref.includes('[')||ref.includes(']'))throw new Error(`${key} 图片链接格式不支持`);
-      try{out[key]=imageUrl(ref);}catch(e){throw new Error(`${key}：${e instanceof Error?e.message:String(e)}`);}
+      else if(!httpImage.test(ref)&&(ref.includes('[')||ref.includes(']')))throw new Error(`${key} 图片链接格式不支持`);
+      try{out[key]=httpImage.test(ref)?coverImageUrl(ref):imageUrl(ref);}catch(e){throw new Error(`${key}：${e instanceof Error?e.message:String(e)}`);}
     }
   }
   const cleaned=stripComments(parsed.body),body=cleaned.body;
@@ -120,7 +133,7 @@ export function prepare(source:string, text:string, c:Config, date:string, resol
       let slashCount=0;for(let i=m.index-1;i>=0&&masked[i]==='\\';i--)slashCount++;
       if(slashCount%2===1)continue;
       const wiki=m[1]!==undefined; let ref=wiki?m[1].split('|')[0]:m[3];
-      if (/^https?:\/\//i.test(ref)) continue;
+      if (httpImage.test(ref)) continue;
       const converted=imageUrl(ref);
       const alt=wiki?(m[1].split('|')[1]||'').replace(/^\d+(?:x\d+)?$/,''):m[2];
       changes.push({start:m.index,end:m.index+m[0].length,value:`![${alt}](${converted})`});

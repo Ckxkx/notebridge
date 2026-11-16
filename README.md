@@ -39,7 +39,7 @@ NoteBridge 是一个面向 Hexo 的 Obsidian 发布插件。它将文章转换�
 | 能力 | 说明 |
 | --- | --- |
 | 单篇与批量发布 | 发布前展示文章、图片、目标路径和完整上传副本，确认后才提交到 GitHub。 |
-| 图片与封面管理 | 收集文章引用的本地图片，通过缩略图选择 Fluid 首页封面和文章页头图。 |
+| 图片与封面管理 | 收集文章引用的本地图片；可用图床链接或本地图片设置 Fluid 首页封面和文章页头图。 |
 | 分类与目录选择 | 只读扫描 Hexo 仓库已有分类和目录，分别设置网页分类与 Markdown 保存位置。 |
 | 状态与部署检查 | 搜索、筛选本地发布状态，只读核验 GitHub 文件，并查询对应提交的 Actions 工作流。 |
 | 撤回与重新发布 | 明确核对后撤回线上文章；撤回记录可跨设备同步，恢复发布仍需再次确认。 |
@@ -166,7 +166,7 @@ You do not need Node.js, Git, or a separate server to use the plugin.
 
 ### 封面和头图
 
-“Fluid 文章封面和头图”默认开启。打开文章后，在操作中心选择“文章封面和头图”，即可通过缩略图选择图片，并设置为：
+“Fluid 文章封面和头图”默认开启。打开文章后，在操作中心选择“文章封面和头图”。PicList 上传并把正文图片替换成图床链接后，点“从正文选图”即可使用：只有一张时直接预览，有多张时按缩略图选择。单独准备的封面可粘贴图片直链或 `![图片](https://…)`，再点“预览链接”。也可以点“选择本地图片”从笔记库中挑选。设置位置支持：
 
 - `index_img`：首页文章封面。
 - `banner_img`：文章页头图。
@@ -176,12 +176,12 @@ You do not need Node.js, Git, or a separate server to use the plugin.
 
 ```yaml
 ---
-index_img: "[[imgs/封面图.png]]"
-banner_img: "[[imgs/封面图.png]]"
+index_img: "https://images.example.com/covers/article.webp"
+banner_img: "https://images.example.com/covers/article.webp"
 ---
 ```
 
-本地图片必须位于发布根目录内的 `imgs/` 文件夹。保存选择只修改本地文章属性，之后仍需预览并发布；图片缺失、路径越界或目标冲突会阻止上传。实际显示效果取决于 Fluid 主题配置。
+图床请使用访客可直接访问的 HTTP(S) 图片地址。NoteBridge 只把链接写入文章属性，发布时随文章保留该链接，不会把图床图片上传到仓库。本地图片仍须放在发布根目录内的 `imgs/` 文件夹，也可手动填写 `"[[imgs/封面图.png]]"`。保存后还需预览并发布文章，网站显示取决于 Fluid 主题配置。
 
 ### 分类和文章目录
 

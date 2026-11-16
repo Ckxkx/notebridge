@@ -16,6 +16,11 @@ const coverConfig={...c,fluidImages:true};
 const cover=(text,config=coverConfig)=>prepare('blog/技术/a.md',text,config,'2026-10-30T00:00:00.000Z',resolve);
 test('Fluid 首页封面与文章头图纳入依赖且转换 URL',()=>{const result=cover('---\nindex_img: "[[b.png]]"\nbanner_img: "![[a.png]]"\n---\n正文 ![[b.png]]');assert.match(result.content,/index_img: \/imgs\/%E6%8A%80%E6%9C%AF\/b.png/);assert.match(result.content,/banner_img: \/imgs\/a.png/);assert.deepEqual(result.assets.map(x=>x.source),['blog/技术/imgs/b.png','blog/imgs/a.png','blog/技术/imgs/b.png']);});
 test('封面支持原始相对路径和外链且外链不上传',()=>{const result=cover('---\nindex_img: b.png\nbanner_img: https://example.com/a.png?x=1\n---\n正文');assert.match(result.content,/https:\/\/example.com\/a.png\?x=1/);assert.equal(result.assets.length,1);});
+test('图床封面使用原链接，不解析本地附件或改写查询参数',()=>{
+ const link='https://images.example.com/封面%20图.webp?v=2&key=%2f';
+ const result=prepare('blog/a.md',`---\nindex_img: "${link}"\nbanner_img: "${link}"\n---\n正文`,coverConfig,'2026-10-30T00:00:00.000Z',()=>assert.fail('不应解析本地附件'));
+ const {parse}=require('yaml');const fm=parse(result.content.split('---\n')[1]);assert.equal(fm.index_img,link);assert.equal(fm.banner_img,link);assert.deepEqual(result.assets,[]);
+});
 test('封面附件缺失或越界阻止发布，草稿不收集附件',()=>{assert.throws(()=>cover('---\nindex_img: missing.png\n---\n正文'),/index_img.*等待附件/);assert.throws(()=>cover('---\nindex_img: outside.png\n---\n正文'),/发布根目录/);assert.equal(cover('---\ndraft: true\nindex_img: missing.png\n---\n正文'),null);});
 test('封面只支持明确的单个图片路径',()=>{assert.throws(()=>cover('---\nindex_img: [[a.png]]\n---\n正文'),/字符串/);assert.throws(()=>cover('---\nindex_img: "[[a.png|300]]"\n---\n正文'),/别名或尺寸/);assert.throws(()=>cover('---\nindex_img: /imgs/a.png\n---\n正文'),/相对路径/);});
 test('关闭 Fluid 封面时不公开字段也不上传封面附件',()=>{let result=cover('---\nindex_img: missing.png\nbanner_img: a.png\n---\n正文',{...coverConfig,fluidImages:false,fields:[...c.fields,'index_img','banner_img']});assert.doesNotMatch(result.content,/index_img|banner_img/);assert.equal(result.assets.length,0);});
